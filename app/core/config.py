@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     database_url: str
 
     firebase_project_id: str | None = None
+    firebase_credentials_path: str = "firebase-service-account.json"
 
     model_config = SettingsConfigDict(
         env_file=".env",

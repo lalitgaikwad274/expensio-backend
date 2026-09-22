@@ -1,0 +1,23 @@
+firebase-service-account.json
+*.pyc
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# FastAPI / Python
+.pytest_cache/
+.mypy_cache/
+
+# Python virtual environment
+venv/
+.venv/
+
+# Environment variables
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/

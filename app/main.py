@@ -1,4 +1,5 @@
 from fastapi import FastAPI, APIRouter
+from app.routers.auth import router as auth_router
 
 app = FastAPI(
     title="Expensio API",
@@ -9,16 +10,8 @@ app = FastAPI(
 api_router = APIRouter(prefix="/api/v1")
 
 
-@api_router.get("/health")
-def health():
-    return {
-        "status": "healthy",
-        "service": "expensio-api",
-    }
-
-
 app.include_router(api_router)
-
+app.include_router(auth_router)
 
 @app.get("/")
 def root():
