@@ -24,7 +24,7 @@ class User(Base):
         nullable=False
     )
 
-    password_hash = Column(String, nullable=False)
+    password_hash = Column(String, nullable=True)
     
     created_at = Column(
         DateTime,
