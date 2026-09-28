@@ -28,7 +28,8 @@ def get_or_create_user(db: Session, firebase_user: dict) -> User:
     return user
 
 
-@router.post("/", response_model=BankAccountResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=BankAccountResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=BankAccountResponse, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 def create_bank_account(
     account: BankAccountCreate,
     firebase_user: dict = Depends(get_current_user),
@@ -49,7 +50,8 @@ def create_bank_account(
     return new_account
 
 
-@router.get("/", response_model=list[BankAccountResponse])
+@router.get("", response_model=list[BankAccountResponse])
+@router.get("/", response_model=list[BankAccountResponse], include_in_schema=False)
 def get_bank_accounts(
     firebase_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)

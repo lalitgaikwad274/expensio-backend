@@ -11,7 +11,6 @@ def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
     token = credentials.credentials
-    print(token)
     decoded_token = verify_firebase_token(token)
 
     if not decoded_token:
