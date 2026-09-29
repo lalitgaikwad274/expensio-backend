@@ -5,6 +5,7 @@ from app.schemas.transaction import (
 )
 from app.schemas.bank_account import (
     BankAccountCreate,
+    BankAccountUpdate,
     BankAccountResponse,
 )
 
@@ -13,5 +14,6 @@ __all__ = [
     "TransactionUpdate",
     "TransactionResponse",
     "BankAccountCreate",
+    "BankAccountUpdate",
     "BankAccountResponse",
 ]
