@@ -1,5 +1,6 @@
-import json
 import os
+import json
+
 import firebase_admin
 from firebase_admin import credentials, auth
 
@@ -10,30 +11,19 @@ def initialize_firebase():
 
     firebase_config = os.getenv("FIREBASE_SERVICE_ACCOUNT")
 
-    # service_account_path = os.getenv(
-    #     "FIREBASE_SERVICE_ACCOUNT_PATH",
-    #     "firebase-service-account.json",
-    # )
+    if not firebase_config:
+        raise RuntimeError(
+            "FIREBASE_SERVICE_ACCOUNT environment variable is not configured"
+        )
 
     try:
-        service_account_path = json.loads(firebase_config)
+        service_account_info = json.loads(firebase_config)
     except json.JSONDecodeError as e:
         raise RuntimeError(
             "FIREBASE_SERVICE_ACCOUNT contains invalid JSON"
         ) from e
 
-
-    if not os.path.exists(service_account_path):
-        raise RuntimeError(
-            f"Firebase service account file not found: {service_account_path}"
-        )
-
-    try:
-        cred = credentials.Certificate(service_account_path)
-    except Exception as e:
-        raise RuntimeError(
-            f"Failed to load Firebase service account: {e}"
-        ) from e
+    cred = credentials.Certificate(service_account_info)
 
     return firebase_admin.initialize_app(cred)
 
@@ -41,8 +31,11 @@ def initialize_firebase():
 firebase_app = initialize_firebase()
 
 
+
 def verify_firebase_token(id_token: str):
     try:
-        return auth.verify_id_token(id_token)
+        decoded_token = auth.verify_id_token(id_token)
+        return decoded_token
+
     except Exception:
         return None
