@@ -1,3 +1,4 @@
+import json
 import os
 import firebase_admin
 from firebase_admin import credentials, auth
@@ -7,10 +8,20 @@ def initialize_firebase():
     if firebase_admin._apps:
         return firebase_admin.get_app()
 
-    service_account_path = os.getenv(
-        "FIREBASE_SERVICE_ACCOUNT_PATH",
-        "firebase-service-account.json",
-    )
+    firebase_config = os.getenv("FIREBASE_SERVICE_ACCOUNT")
+
+    # service_account_path = os.getenv(
+    #     "FIREBASE_SERVICE_ACCOUNT_PATH",
+    #     "firebase-service-account.json",
+    # )
+
+    try:
+        service_account_path = json.loads(firebase_config)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(
+            "FIREBASE_SERVICE_ACCOUNT contains invalid JSON"
+        ) from e
+
 
     if not os.path.exists(service_account_path):
         raise RuntimeError(
