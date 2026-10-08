@@ -8,12 +8,16 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.auth.firebase import verify_firebase_token
 from app.database import get_db
-from app.models import Group, GroupMember, User
+from app.models import Group, GroupMember, User, GroupExpense, ExpenseSplit, Category
 from app.schemas.group import (
     GroupCreate,
     GroupResponse,
     GroupMemberCreate,
     GroupMemberResponse,
+)
+from app.schemas.group_expense import (
+    GroupExpenseCreate,
+    GroupExpenseResponse,
 )
 from app.services.group_service import GroupService, group_service
 
@@ -132,9 +136,19 @@ def list_groups(
     if firebase_user:
         user = db.query(User).filter(User.firebase_uid == firebase_user.get("uid")).first()
         if user:
-            member_group_ids = db.query(GroupMember.group_id).filter(GroupMember.user_id == user.id).subquery()
+            member_group_ids = db.query(GroupMember.group_id).filter(GroupMember.user_id == user.id).scalar_subquery()
             return query.filter((Group.created_by == user.id) | (Group.id.in_(member_group_ids))).all()
     return query.all()
+
+
+# Get all expenses across all groups
+@router.get("/expenses", response_model=List[GroupExpenseResponse])
+@router.get("/expenses/", response_model=List[GroupExpenseResponse], include_in_schema=False)
+def get_all_expenses(db: Session = Depends(get_db)):
+    """
+    Get all group expenses across all groups.
+    """
+    return group_service.getAllExpenses(db)
 
 
 # Get group by ID
@@ -226,3 +240,145 @@ def delete_group(
     db.delete(group)
     db.commit()
     return {"message": f"Group with ID {group_id} deleted successfully."}
+
+@router.post("/{group_id}/expenses", response_model=GroupExpenseResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/{group_id}/expenses/", response_model=GroupExpenseResponse, status_code=status.HTTP_201_CREATED, include_in_schema=False)
+async def add_group_expense(
+    group_id: int,
+    request: Request,
+    expense_data: Optional[GroupExpenseCreate] = None,
+    firebase_user: Optional[dict] = Depends(get_current_user_optional),
+    db: Session = Depends(get_db)
+):
+    """
+    Add an expense to a group and automatically split it among group members.
+    Supports split types: 'equal' (default), 'exact', 'percentage', 'shares'.
+    """
+    group = db.query(Group).filter(Group.id == group_id).first()
+    if not group:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Group with ID {group_id} not found."
+        )
+
+    # Flexible payload extraction from raw body, query params, or wrappers
+    raw_body = await request.body()
+    raw_str = raw_body.decode("utf-8", errors="replace")
+    logger.info(f"POST /groups/{group_id}/expenses raw_body={raw_str}")
+    payload = {}
+    if raw_str.strip():
+        try:
+            payload = json.loads(raw_str)
+        except Exception:
+            pass
+
+    if not payload and request.query_params:
+        payload = dict(request.query_params)
+
+    # Unwrap if wrapped under 'expense', 'newExpense', 'data', 'body'
+    if isinstance(payload, dict):
+        for k in ["expense", "newExpense", "data", "body"]:
+            if k in payload and isinstance(payload[k], dict):
+                payload = payload[k]
+                break
+
+    if payload:
+        if "group_id" not in payload:
+            payload["group_id"] = group_id
+        data_to_use = GroupExpenseCreate(**payload)
+    elif expense_data is not None:
+        data_to_use = expense_data
+        data_to_use.group_id = group_id
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Expense payload is required."
+        )
+
+    user = None
+    if firebase_user:
+        user = GroupService.get_or_create_user(db, firebase_user)
+
+    created_expense = await group_service.create_group_expense(
+        db=db,
+        group_id=group_id,
+        data=data_to_use,
+        current_user=user,
+    )
+    return created_expense
+
+
+@router.get("/{group_id}/expenses", response_model=List[GroupExpenseResponse])
+@router.get("/{group_id}/expenses/", response_model=List[GroupExpenseResponse], include_in_schema=False)
+def list_group_expenses(
+    group_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    List all expenses for a group along with their splits.
+    """
+    group = db.query(Group).filter(Group.id == group_id).first()
+    if not group:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Group with ID {group_id} not found."
+        )
+
+    expenses = (
+        db.query(GroupExpense)
+        .options(
+            joinedload(GroupExpense.splits).joinedload(ExpenseSplit.member).joinedload(GroupMember.user),
+            joinedload(GroupExpense.payer).joinedload(GroupMember.user),
+            joinedload(GroupExpense.category),
+        )
+        .filter(GroupExpense.group_id == group_id)
+        .order_by(GroupExpense.expense_date.desc(), GroupExpense.id.desc())
+        .all()
+    )
+    return expenses
+
+
+@router.get("/{group_id}/expenses/{expense_id}", response_model=GroupExpenseResponse)
+def get_group_expense(
+    group_id: int,
+    expense_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Get a specific group expense by ID with its splits.
+    """
+    expense = (
+        db.query(GroupExpense)
+        .options(
+            joinedload(GroupExpense.splits).joinedload(ExpenseSplit.member).joinedload(GroupMember.user),
+            joinedload(GroupExpense.payer).joinedload(GroupMember.user),
+            joinedload(GroupExpense.category),
+        )
+        .filter(GroupExpense.group_id == group_id, GroupExpense.id == expense_id)
+        .first()
+    )
+    if not expense:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Expense with ID {expense_id} not found in group {group_id}."
+        )
+    return expense
+
+@router.delete("/{group_id}/expenses/{expense_id}", status_code=status.HTTP_200_OK)
+def delete_group_expense(
+    group_id: int,
+    expense_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Delete a specific group expense by ID.
+    """
+    expense = db.query(GroupExpense).filter(GroupExpense.group_id == group_id, GroupExpense.id == expense_id).first()
+    if not expense:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Expense with ID {expense_id} not found in group {group_id}."
+        )
+    db.delete(expense)
+    db.commit()
+    return {"message": f"Expense with ID {expense_id} deleted successfully."}

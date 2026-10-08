@@ -1,3 +1,4 @@
+from typing import Optional
 from sqlalchemy.orm import relationship
 from sqlalchemy import (
     Column,
@@ -56,3 +57,9 @@ class ExpenseSplit(Base):
     member = relationship(
         "GroupMember"
     )
+
+    @property
+    def member_name(self) -> Optional[str]:
+        if self.member:
+            return self.member.name
+        return None

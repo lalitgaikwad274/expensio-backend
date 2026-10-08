@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Union
 from pydantic import BaseModel, Field, ConfigDict, model_validator, field_validator
 
 
@@ -26,7 +26,7 @@ class ExpenseSplitCreate(BaseModel):
     """
     Split definition for an individual group member.
     """
-    member_id: int = Field(..., description="Group member ID (from group_members table)", example=1)
+    member_id: Union[int, str] = Field(..., description="Group member ID or client ID", example=1)
     amount: Optional[Decimal] = Field(None, ge=0, description="Exact amount owed by this member", example=600.00)
     percentage: Optional[Decimal] = Field(None, ge=0, le=100, description="Percentage share (0-100)", example=25.0)
     shares: Optional[Decimal] = Field(None, ge=0, description="Ratio / share count", example=1.0)
@@ -67,13 +67,13 @@ class GroupExpenseCreate(BaseModel):
     group_id: Optional[int] = Field(None, description="Target group ID (if not provided in URL path)", example=1)
     description: str = Field(..., max_length=255, description="What did you spend on? (e.g. Dinner, Cab, Hotel)", example="Dinner")
     amount: Decimal = Field(..., gt=0, description="Total expense amount in currency", example=2400.00)
-    paid_by: int = Field(..., description="Group member ID of the payer", example=1)
+    paid_by: Optional[Union[int, str]] = Field(None, description="Group member ID or client ID of the payer", example=1)
 
     category_id: Optional[int] = Field(None, description="Category ID (e.g. Food, Travel, Stay)", example=1)
     category_name: Optional[str] = Field(None, description="Category name (optional fallback)", example="Food")
 
     split_type: str = Field(default="equal", description="equal | exact | percentage | shares", example="equal")
-    split_members: Optional[List[int]] = Field(
+    split_members: Optional[List[Union[int, str]]] = Field(
         default=None,
         description="For equal split: list of member IDs participating in the split (Screen 'Split between')"
     )

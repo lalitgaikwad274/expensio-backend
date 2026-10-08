@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: expensio-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: expensio_user
+      POSTGRES_PASSWORD: 1q2w3e
+      POSTGRES_DB: expensio
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U expensio_user -d expensio"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: expensio-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_NAME=Expensio API
+      - APP_ENV=development
+      - DATABASE_URL=postgresql+psycopg2://expensio_user:1q2w3e@localhost:5432/expensio
+      - FIREBASE_CREDENTIALS_PATH=firebase-service-account.json
+    volumes:
+      - ./app:/app/app
+      - ./firebase-service-account.json:/app/firebase-service-account.json:ro
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  postgres_data:
+    driver: local

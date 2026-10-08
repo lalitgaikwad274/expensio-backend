@@ -67,5 +67,9 @@ class Group(Base):
         return str(self.created_by) if self.created_by else None
 
     @property
+    def created_by_firebase_uid(self) -> Optional[str]:
+        return self.creator.firebase_uid if self.creator else None
+
+    @property
     def createdAt(self) -> datetime:
         return self.created_at

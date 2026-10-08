@@ -77,6 +77,14 @@ class GroupMember(Base):
         return self.user.email if self.user else None
 
     @property
+    def firebase_uid(self) -> Optional[str]:
+        return self.user.firebase_uid if self.user else None
+
+    @property
+    def status(self) -> str:
+        return "active" if self.is_active else "pending"
+
+    @property
     def initials(self) -> str:
         name_str = (self.name or "U").strip()
         parts = name_str.split()

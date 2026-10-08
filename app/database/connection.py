@@ -43,6 +43,13 @@ def create_tables():
     Base.metadata.create_all(bind=engine)
 
     try:
+        from sqlalchemy import text
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE group_expenses ADD COLUMN IF NOT EXISTS paid_by_firebase_uid VARCHAR(255);"))
+    except Exception as e:
+        print(f"Migration notice: {e}")
+
+    try:
         from app.models import Category, User, BankAccount
         with SessionLocal() as db:
             if db.query(Category).count() == 0:

@@ -112,13 +112,9 @@ class GroupMemberResponse(BaseModel):
 
     id: Union[int, str]
     group_id: int
-    name: Optional[str] = "Member"
-    phone: Optional[str] = None
+    name: str
     phone_number: Optional[str] = None
     email: Optional[str] = None
-    initials: Optional[str] = "ME"
-    color: Optional[str] = None
-    avatar_color: Optional[str] = None
     role: str = "member"
     isAdmin: bool = False
     isCurrentUser: bool = False

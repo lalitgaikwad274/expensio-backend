@@ -11,6 +11,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 from datetime import datetime
+from typing import Optional
 
 
 class GroupExpense(Base):
@@ -47,6 +48,11 @@ class GroupExpense(Base):
         BigInteger,
         ForeignKey("group_members.id"),
         nullable=False
+    )
+
+    paid_by_firebase_uid = Column(
+        String(255),
+        nullable=True
     )
 
     split_type = Column(
@@ -96,3 +102,15 @@ class GroupExpense(Base):
     category = relationship(
         "Category"
     )
+
+    @property
+    def payer_name(self) -> Optional[str]:
+        if self.payer:
+            return self.payer.name
+        return None
+
+    @property
+    def category_name(self) -> Optional[str]:
+        if self.category:
+            return self.category.name
+        return None
