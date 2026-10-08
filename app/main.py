@@ -8,6 +8,7 @@ from app.database import create_tables
 from app.routers.auth import router as auth_router
 from app.routers.transactions import router as transactions_router
 from app.routers.bank_accounts import router as bank_accounts_router
+from app.routers.group import router as group_router
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -41,7 +42,7 @@ app.include_router(api_router)
 app.include_router(auth_router)
 app.include_router(transactions_router)
 app.include_router(bank_accounts_router)
-
+app.include_router(group_router)
 @app.get("/")
 def root():
     return {
