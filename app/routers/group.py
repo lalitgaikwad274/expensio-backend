@@ -382,3 +382,36 @@ def delete_group_expense(
     db.delete(expense)
     db.commit()
     return {"message": f"Expense with ID {expense_id} deleted successfully."}
+
+
+@router.get("/usersgroups/{user_id}", response_model=List[GroupResponse])
+def get_groups_by_user_id(
+    user_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Get all groups of a specific user.
+    """
+    memberships = db.query(GroupMember).filter(GroupMember.user_id == user_id).all()
+    group_ids = [m.group_id for m in memberships]
+
+    if not group_ids:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No groups found for user with ID {user_id}."
+        )
+
+    groups = (
+        db.query(Group)
+        .options(joinedload(Group.members).joinedload(GroupMember.user))
+        .filter(Group.id.in_(group_ids))
+        .all()
+    )
+
+    if not groups:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No groups found for user with ID {user_id}."
+        )
+
+    return groups
