@@ -23,8 +23,7 @@ class User(Base):
         unique=True,
         nullable=False
     )
-
-    password_hash = Column(String, nullable=True)
+    phone_number = Column(String(20), nullable=True)
     
     created_at = Column(
         DateTime,

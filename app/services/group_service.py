@@ -4,6 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional, List, Any, Union
 from fastapi import HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import SessionLocal
@@ -31,7 +32,6 @@ class GroupService:
                 firebase_uid=firebase_uid,
                 email=email,
                 name=name,
-                password_hash="",
             )
             db.add(user)
             db.commit()
@@ -48,103 +48,93 @@ class GroupService:
         client_id: Optional[str] = None,
     ) -> Optional[User]:
         """
-        Resolve an existing User by phone_number, name, user_id, email, or client_id;
-        or provision a new User record if not found.
+        Resolve an existing User by phone_number, email, user_id, client_id, or name;
+        if not present, create and add a new User to the users table and return it.
         """
-        # 0. By client_id if provided (e.g. "user_akshay")
-        if client_id and str(client_id).strip():
-            cid = str(client_id).strip()
-            user = db.query(User).filter(User.firebase_uid == cid).first()
-            if user:
-                if name and (not user.name or user.name.startswith("user_")):
-                    user.name = name.strip()
-                    db.flush()
-                return user
+        phone_str = str(phone_number).strip() if phone_number and str(phone_number).strip() else None
+        phone_clean = re.sub(r"[^0-9]", "", phone_str) if phone_str else ""
+        last_10 = phone_clean[-10:] if len(phone_clean) >= 10 else phone_clean
+        name_str = str(name).strip() if name and str(name).strip() else None
+        email_str = str(email).strip().lower() if email and str(email).strip() else None
+        cid_str = str(client_id).strip() if client_id and str(client_id).strip() else None
 
-        # 1. By email if provided
-        if email and email.strip():
-            email_clean = email.strip()
-            user = db.query(User).filter(User.email == email_clean).first()
-            if user:
-                if name and (not user.name or user.name.startswith("phone_")):
-                    user.name = name.strip()
-                    db.flush()
-                return user
+        user: Optional[User] = None
 
-        # 2. By phone_number (primary)
-        if phone_number and str(phone_number).strip():
-            phone_str = str(phone_number).strip()
-            phone_clean = re.sub(r"[^0-9]", "", phone_str)
-            phone_uid = client_id or (f"phone_{phone_clean}" if phone_clean else f"phone_{uuid.uuid4().hex[:8]}")
-            user = db.query(User).filter(User.firebase_uid == phone_uid).first()
-            if not user and phone_clean:
-                user = db.query(User).filter(User.firebase_uid.like(f"%{phone_clean}%")).first()
+        # 1. Search by phone_number (primary identifier for contacts/members)
+        if phone_str:
+            user = db.query(User).filter(User.phone_number == phone_str).first()
+            if not user and last_10:
+                user = db.query(User).filter(User.phone_number.like(f"%{last_10}%")).first()
+            if not user and last_10:
+                user = db.query(User).filter(User.firebase_uid.like(f"%{last_10}%")).first()
 
-            if user:
-                if name and name.strip() and (not user.name or user.name.startswith("phone_")):
-                    user.name = name.strip()
-                    db.flush()
-                return user
+        # 2. Search by email
+        if not user and email_str:
+            user = db.query(User).filter(func.lower(User.email) == email_str).first()
 
-            user_email = email.strip() if email and email.strip() else f"{phone_uid}@expensio.app"
-            user = User(
-                firebase_uid=phone_uid,
-                name=name.strip() if name and name.strip() else phone_str,
-                email=user_email,
-                password_hash="",
-            )
-            db.add(user)
-            db.flush()
-            return user
-
-        # 3. By name (if phone_number not provided)
-        if name and name.strip():
-            name_clean = name.strip()
-            user = db.query(User).filter(User.name == name_clean).first()
-            if user:
-                return user
-            safe_name = re.sub(r"[^a-zA-Z0-9]", "_", name_clean.lower())
-            guest_uid = client_id or f"member_{safe_name}_{uuid.uuid4().hex[:6]}"
-            user = User(
-                firebase_uid=guest_uid,
-                name=name_clean,
-                email=email.strip() if email and email.strip() else f"{guest_uid}@expensio.app",
-                password_hash="",
-            )
-            db.add(user)
-            db.flush()
-            return user
-
-        # 4. By user_id (fallback)
-        if user_id:
+        # 3. Search by user_id
+        if not user and user_id:
             user = db.query(User).filter(User.id == user_id).first()
-            if user:
-                return user
-            uid_str = client_id or f"user_{user_id}_{uuid.uuid4().hex[:6]}"
-            user = User(
-                id=user_id,
-                firebase_uid=uid_str,
-                name=name or f"User {user_id}",
-                email=email or f"user_{user_id}@expensio.app",
-                password_hash="",
-            )
-            try:
-                db.add(user)
-                db.flush()
-                return user
-            except Exception:
-                db.rollback()
-                user = User(
-                    firebase_uid=uid_str,
-                    name=name or f"User {user_id}",
-                    email=email or f"user_{user_id}@expensio.app",
-                    password_hash="",
-                )
-                db.add(user)
-                db.flush()
-                return user
 
-        return None
+        # 4. Search by client_id / firebase_uid
+        if not user and cid_str:
+            user = db.query(User).filter(User.firebase_uid == cid_str).first()
+
+        # 5. Search by name (if not generic placeholder)
+        if not user and name_str and name_str.lower() not in ["user", "member", "default user"]:
+            user = db.query(User).filter(func.lower(User.name) == name_str.lower()).first()
+
+        # If user is found, update any missing details
+        if user:
+            updated = False
+            if phone_str and not getattr(user, "phone_number", None):
+                user.phone_number = phone_str
+                updated = True
+            if name_str and (not user.name or user.name.lower().startswith("phone_") or user.name.lower().startswith("user_") or user.name.lower() in ["user", "default user"]):
+                user.name = name_str
+                updated = True
+            if updated:
+                db.flush()
+            return user
+
+        # Member is NOT present in users table -> First add it in users table!
+        if phone_clean:
+            base_uid = f"phone_{phone_clean}"
+        elif cid_str:
+            base_uid = cid_str
+        elif email_str:
+            safe_email_prefix = re.sub(r"[^a-zA-Z0-9]", "_", email_str.split("@")[0])
+            base_uid = f"user_{safe_email_prefix}_{uuid.uuid4().hex[:6]}"
+        elif name_str:
+            safe_name = re.sub(r"[^a-zA-Z0-9]", "_", name_str.lower())
+            base_uid = f"member_{safe_name}_{uuid.uuid4().hex[:6]}"
+        else:
+            base_uid = f"user_{uuid.uuid4().hex[:8]}"
+
+        new_uid = base_uid
+        if db.query(User).filter(User.firebase_uid == new_uid).first():
+            new_uid = f"{base_uid}_{uuid.uuid4().hex[:4]}"
+
+        if email_str:
+            new_email = email_str
+            if db.query(User).filter(func.lower(User.email) == new_email).first():
+                new_email = f"{new_uid}@expensio.app"
+        else:
+            new_email = f"{new_uid}@expensio.app"
+        if db.query(User).filter(func.lower(User.email) == new_email.lower()).first():
+            new_email = f"{new_uid}_{uuid.uuid4().hex[:4]}@expensio.app"
+
+        display_name = name_str or phone_str or "Member"
+
+        new_user = User(
+            firebase_uid=new_uid,
+            name=display_name,
+            email=new_email,
+            phone_number=phone_str,
+        )
+        db.add(new_user)
+        db.flush()  # Flushes to DB so new_user.id is assigned
+        return new_user
 
     async def create_group(
         self,
@@ -213,7 +203,6 @@ class GroupService:
                     firebase_uid="default_user",
                     name="Default User",
                     email="user@expensio.app",
-                    password_hash="",
                 )
                 db.add(user)
                 db.commit()
@@ -267,7 +256,7 @@ class GroupService:
                                 group_id=new_group.id,
                                 user_id=target_user.id,
                                 role=m.role or "member",
-                                phone_number=m.phone_number,
+                                phone_number=m.phone_number or target_user.phone_number,
                                 is_active=True,
                             )
                         )
@@ -289,6 +278,7 @@ class GroupService:
                                     group_id=new_group.id,
                                     user_id=target_user.id,
                                     role="member",
+                                    phone_number=target_user.phone_number,
                                     is_active=True,
                                 )
                             )
@@ -309,7 +299,7 @@ class GroupService:
                                 group_id=new_group.id,
                                 user_id=target_user.id,
                                 role="member",
-                                phone_number=phone,
+                                phone_number=phone or target_user.phone_number,
                                 is_active=True,
                             )
                         )

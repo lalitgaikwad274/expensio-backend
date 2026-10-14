@@ -46,6 +46,19 @@ def create_tables():
         from sqlalchemy import text
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE group_expenses ADD COLUMN IF NOT EXISTS paid_by_firebase_uid VARCHAR(255);"))
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_number VARCHAR(20);"))
+            conn.execute(text("ALTER TABLE group_members ADD COLUMN IF NOT EXISTS phone_number VARCHAR(20);"))
+            conn.execute(text("""
+                DO $$
+                BEGIN
+                    IF EXISTS (
+                        SELECT 1 FROM information_schema.columns 
+                        WHERE table_name = 'users' AND column_name = 'password_hash'
+                    ) THEN
+                        ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;
+                    END IF;
+                END $$;
+            """))
     except Exception as e:
         print(f"Migration notice: {e}")
 
@@ -72,7 +85,6 @@ def create_tables():
                         firebase_uid="default_user",
                         name="Default User",
                         email="user@expensio.app",
-                        password_hash="",
                     )
                     db.add(user)
                     db.commit()

@@ -61,25 +61,15 @@ async def create_group(
     """
     Create a new group.
     Supports flexible field aliases and handles payloads from body, query params, or wrappers.
+    For each member: searches in users table (by phone/email/name), creates the user in users
+    table if not present, and links their user_id to group_members.
     """
-
-    firebase_uid = firebase_user.get("uid", "default_user")
-    user = db.query(User).filter(User.firebase_uid == firebase_uid).first()
-    if not user:
-        email = firebase_user.get("email") or f"{firebase_uid}@expensio.app"
-        user = User(
-            firebase_uid=firebase_uid,
-            email=email,
-            name=firebase_user.get("name") or firebase_user.get("display_name") or "User",
-            password_hash="",
-        )
-    print("########### ", request , "################")
     raw_body = await request.body()
     raw_str = raw_body.decode("utf-8", errors="replace")
     logger.info(f"POST /groups: content-type={request.headers.get('content-type')}")
     logger.info(f"POST /groups query_params={dict(request.query_params)}")
     logger.info(f"POST /groups raw_body={raw_str}")
-    print("#####################",raw_str,"#####################")
+
     payload = {}
     if raw_str.strip():
         try:
@@ -106,11 +96,11 @@ async def create_group(
     else:
         data_to_use = GroupCreate()
 
-    user = None
-    if firebase_user:
-        user = GroupService.get_or_create_user(db, firebase_user)
+    creator_user = GroupService.get_or_create_user(
+        db, firebase_user if firebase_user else {"uid": "default_user"}
+    )
 
-    new_group = await group_service.create_group(data=data_to_use, db=db, user=user)
+    new_group = await group_service.create_group(data=data_to_use, db=db, user=creator_user)
 
     # Reload with joined members and users for clean serialization
     reloaded = (

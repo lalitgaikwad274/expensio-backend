@@ -30,7 +30,6 @@ async def test_create_group_basic(db_session):
         firebase_uid="uid_123",
         email="creator@expensio.app",
         name="Akshay Salunke",
-        password_hash="",
     )
     db_session.add(user)
     db_session.commit()
@@ -64,13 +63,11 @@ async def test_create_group_with_members_and_phones(db_session):
         firebase_uid="uid_admin",
         email="admin@expensio.app",
         name="Admin",
-        password_hash="",
     )
     member_user = User(
         firebase_uid="uid_member",
         email="member@expensio.app",
         name="Rahul Sharma",
-        password_hash="",
     )
     db_session.add_all([creator, member_user])
     db_session.commit()
@@ -96,7 +93,7 @@ async def test_create_group_with_members_and_phones(db_session):
 @pytest.mark.asyncio
 async def test_create_group_empty_name_error(db_session):
     service = GroupService()
-    user = User(firebase_uid="uid_test", email="test@expensio.app", name="Test", password_hash="")
+    user = User(firebase_uid="uid_test", email="test@expensio.app", name="Test")
     db_session.add(user)
     db_session.commit()
 
@@ -113,7 +110,6 @@ async def test_create_group_with_user_request_fields(db_session):
         firebase_uid="uid_creator",
         email="creator@expensio.app",
         name="Creator",
-        password_hash="",
     )
     db_session.add(creator)
     db_session.commit()
@@ -226,9 +222,9 @@ async def test_create_group_frontend_payload(db_session):
 @pytest.mark.asyncio
 async def test_create_group_expense_equal_split(db_session):
     service = GroupService()
-    creator = User(firebase_uid="uid_c1", email="c1@expensio.app", name="Akshay", password_hash="")
-    m2_user = User(firebase_uid="uid_m2", email="m2@expensio.app", name="Rahul", password_hash="")
-    m3_user = User(firebase_uid="uid_m3", email="m3@expensio.app", name="Sonali", password_hash="")
+    creator = User(firebase_uid="uid_c1", email="c1@expensio.app", name="Akshay")
+    m2_user = User(firebase_uid="uid_m2", email="m2@expensio.app", name="Rahul")
+    m3_user = User(firebase_uid="uid_m3", email="m3@expensio.app", name="Sonali")
     db_session.add_all([creator, m2_user, m3_user])
     db_session.commit()
 
@@ -276,8 +272,8 @@ async def test_create_group_expense_equal_split(db_session):
 @pytest.mark.asyncio
 async def test_create_group_expense_exact_split(db_session):
     service = GroupService()
-    user1 = User(firebase_uid="uid_e1", email="e1@expensio.app", name="User 1", password_hash="")
-    user2 = User(firebase_uid="uid_e2", email="e2@expensio.app", name="User 2", password_hash="")
+    user1 = User(firebase_uid="uid_e1", email="e1@expensio.app", name="User 1")
+    user2 = User(firebase_uid="uid_e2", email="e2@expensio.app", name="User 2")
     db_session.add_all([user1, user2])
     db_session.commit()
 

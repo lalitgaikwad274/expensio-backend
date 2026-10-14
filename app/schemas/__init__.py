@@ -40,7 +40,17 @@ from app.schemas.group_expense import (
     normalize_split_type,
 )
 
+from app.schemas.user import (
+    UserBase,
+    UserCreate,
+    UserResponse,
+)
+
 __all__ = [
+    # User
+    "UserBase",
+    "UserCreate",
+    "UserResponse",
     # Transaction
     "TransactionCreate",
     "TransactionUpdate",

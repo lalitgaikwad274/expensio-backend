@@ -28,7 +28,6 @@ def get_or_create_user(db: Session, firebase_user: dict) -> User:
             firebase_uid=firebase_uid,
             email=email,
             name=firebase_user.get("name") or firebase_user.get("display_name") or "User",
-            password_hash="",
         )
         db.add(user)
         db.commit()

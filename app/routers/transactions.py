@@ -1,3 +1,4 @@
+from fastapi import Query
 from app.auth.dependencies import get_current_user
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -29,7 +30,6 @@ def create_transaction(
             firebase_uid=firebase_uid,
             email=firebase_user.get("email", "user@expensio.app"),
             name=firebase_user.get("name") or firebase_user.get("display_name") or "User",
-            password_hash="",
         )
         db.add(user)
         db.commit()
@@ -116,26 +116,32 @@ def create_transaction(
     return new_transaction
 
 # get all transactions api
-@router.get("/", response_model=list[TransactionResponse], include_in_schema=False)
+@router.get("/", response_model=list[TransactionResponse])
 def get_all_transactions(
+    limit: int = Query(default=20, ge=1, le=100), 
     firebase_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     firebase_uid = firebase_user.get("uid", "default_user")
-    user = db.query(User).filter(User.firebase_uid == firebase_uid).first()
-    if not user:
-        return []
-
-    user_account_ids = [acc.id for acc in db.query(BankAccount.id).filter(BankAccount.user_id == user.id).all()]
-    if not user_account_ids:
+    if not firebase_uid:
         return []
 
     transactions = (
         db.query(Transaction)
-        .filter(Transaction.bank_account_id.in_(user_account_ids))
+        .join(
+            BankAccount,
+            Transaction.bank_account_id == BankAccount.id,
+        )
+        .join(
+            User,
+            BankAccount.user_id == User.id,
+        )
+        .filter(User.firebase_uid == firebase_uid)
         .order_by(Transaction.transaction_date.desc())
+        .limit(limit)
         .all()
     )
+
     return transactions
  
 
